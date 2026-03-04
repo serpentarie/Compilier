@@ -1,16 +1,18 @@
-package main
+package lexer
 
 import (
 	"fmt"
 	"unicode"
 )
 
+// Lexer performs lexical analysis on input source code.
 type Lexer struct {
 	input    string
 	length   int
 	position int
 }
 
+// NewLexer creates a new lexer instance with the given input string.
 func NewLexer(input string) *Lexer {
 	return &Lexer{
 		input:    input,
@@ -19,6 +21,7 @@ func NewLexer(input string) *Lexer {
 	}
 }
 
+// Tokenize converts the input string into a slice of tokens.
 func (l *Lexer) Tokenize() []Token {
 	var result []Token
 
@@ -105,10 +108,51 @@ func (l *Lexer) TokenizeOperator(result *[]Token) {
 		l.AddToken(result, SLASH, "/", start)
 	case '=':
 		l.Next()
-		l.AddToken(result, EQ, "=", start)
+		if l.Peek() == '=' {
+			l.Next()
+			l.AddToken(result, EQEQ, "==", start)
+		} else {
+			l.AddToken(result, EQ, "=", start)
+		}
+	case '<':
+		l.Next()
+		if l.Peek() == '=' {
+			l.Next()
+			l.AddToken(result, LTEQ, "<=", start)
+		} else {
+			l.AddToken(result, LT, "<", start)
+		}
+	case '>':
+		l.Next()
+		if l.Peek() == '=' {
+			l.Next()
+			l.AddToken(result, GTEQ, ">=", start)
+		} else {
+			l.AddToken(result, GT, ">", start)
+		}
+	case '!':
+		l.Next()
+		if l.Peek() == '=' {
+			l.Next()
+			l.AddToken(result, NEQ, "!=", start)
+		} else {
+			l.AddToken(result, EXCL, "!", start)
+		}
 	case ';':
 		l.Next()
 		l.AddToken(result, SEMICOLON, ";", start)
+	case '(':
+		l.Next()
+		l.AddToken(result, LPAREN, "(", start)
+	case ')':
+		l.Next()
+		l.AddToken(result, RPAREN, ")", start)
+	case '{':
+		l.Next()
+		l.AddToken(result, LBRACE, "{", start)
+	case '}':
+		l.Next()
+		l.AddToken(result, RBRACE, "}", start)
 	default:
 		panic(fmt.Sprintf("Unexpected character '%c' at position %d", current, l.position))
 	}

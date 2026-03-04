@@ -4,12 +4,14 @@ import (
 	"fmt"
 	"math/rand"
 	"strings"
+
+	"mycompiler/lexer"
 )
 
 func main() {
 	codeExample := "var x = 123; print x + 5;"
 
-	lexer := NewLexer(codeExample)
+	lexer := lexer.NewLexer(codeExample)
 	tokens := lexer.Tokenize()
 
 	for _, token := range tokens {

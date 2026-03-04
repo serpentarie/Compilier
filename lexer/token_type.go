@@ -1,7 +1,9 @@
-package main
+package lexer
 
+// TokenType represents the type of a lexical token.
 type TokenType int
 
+// Token type constants.
 const (
 	NUMBER TokenType = iota
 	ID
@@ -37,6 +39,7 @@ const (
 	EOF
 )
 
+// String returns the string representation of the token type.
 func (t TokenType) String() string {
 	return [...]string{
 		"NUMBER", "ID", "STRING", "VAR",
