@@ -47,17 +47,48 @@ func main() {
 	}
 
 	a := semantic.NewAnalyzer()
-	errs := a.Analyze(statements)
-	if len(errs) == 0 {
+	allErrs := a.Analyze(statements)
+
+	// Separate errors from warnings
+	var errors, warnings []error
+	for _, err := range allErrs {
+		if strings.HasPrefix(err.Error(), "[WARNING]") {
+			warnings = append(warnings, err)
+		} else {
+			errors = append(errors, err)
+		}
+	}
+
+	hasWarnings := len(warnings) > 0
+	hasErrors := len(errors) > 0
+
+	if !hasWarnings && !hasErrors {
 		fmt.Println("OK: semantic analysis passed")
 		return
 	}
 
-	fmt.Println("[Semantic errors]")
-	for _, err := range errs {
-		fmt.Println("-", err)
+	if hasWarnings {
+		fmt.Println("[Warnings]")
+		for _, w := range warnings {
+			msg := w.Error()
+			if len(msg) > 9 && msg[:9] == "[WARNING]" {
+				msg = strings.TrimSpace(msg[9:])
+			}
+			fmt.Println("-", msg)
+		}
 	}
-	os.Exit(2)
+
+	if hasErrors {
+		fmt.Println("[Semantic errors]")
+		for _, err := range errors {
+			fmt.Println("-", err)
+		}
+	}
+
+	if hasErrors {
+		os.Exit(2)
+	}
+	os.Exit(1)
 }
 
 type RandomProgramGenerator struct{}
@@ -68,14 +99,18 @@ func (g *RandomProgramGenerator) Generate(lines int) string {
 
 	var sb strings.Builder
 
+	for _, v := range variables {
+		sb.WriteString(fmt.Sprintf("var %s;\n", v))
+	}
+
 	for i := 0; i < lines; i++ {
 		actionType := rand.Intn(4)
 
 		switch actionType {
-		case 0: // var x = 5 + y;
+		case 0: // x = 5 + y;
 			v := variables[rand.Intn(len(variables))]
 			val := rand.Intn(100)
-			sb.WriteString(fmt.Sprintf("var %s = %d;\n", v, val))
+			sb.WriteString(fmt.Sprintf("%s = %d;\n", v, val))
 		case 1: // print x + 5;
 			v := variables[rand.Intn(len(variables))]
 			op := operators[rand.Intn(len(operators))]
