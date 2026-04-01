@@ -5,14 +5,12 @@ import (
 	"unicode"
 )
 
-// Lexer performs lexical analysis on input source code.
 type Lexer struct {
 	input    string
 	length   int
 	position int
 }
 
-// NewLexer creates a new lexer instance with the given input string.
 func NewLexer(input string) *Lexer {
 	return &Lexer{
 		input:    input,
@@ -21,7 +19,6 @@ func NewLexer(input string) *Lexer {
 	}
 }
 
-// Tokenize converts the input string into a slice of tokens.
 func (l *Lexer) Tokenize() []Token {
 	var result []Token
 
@@ -35,6 +32,11 @@ func (l *Lexer) Tokenize() []Token {
 
 		if unicode.IsDigit(current) {
 			l.TokenizeNumber(&result)
+			continue
+		}
+
+		if current == '"' {
+			l.TokenizeString(&result)
 			continue
 		}
 
@@ -56,8 +58,32 @@ func (l *Lexer) TokenizeNumber(result *[]Token) {
 		l.Next()
 	}
 
+	if l.Peek() == '.' {
+		l.Next()
+		for unicode.IsDigit(l.Peek()) {
+			l.Next()
+		}
+	}
+
 	numberStr := l.input[start:l.position]
 	*result = append(*result, NewToken(NUMBER, numberStr, start))
+}
+
+func (l *Lexer) TokenizeString(result *[]Token) {
+	start := l.position
+	l.Next() // opening quote
+
+	for l.Peek() != '"' && l.Peek() != 0 {
+		l.Next()
+	}
+
+	if l.Peek() == 0 {
+		panic(fmt.Sprintf("Unterminated string at position %d", start))
+	}
+
+	value := l.input[start+1 : l.position]
+	l.Next() // closing quote
+	l.AddToken(result, STRING, value, start)
 }
 
 func (l *Lexer) TokenizeWord(result *[]Token) {
@@ -76,6 +102,10 @@ func (l *Lexer) TokenizeWord(result *[]Token) {
 	switch word {
 	case "var":
 		l.AddToken(result, VAR, word, start)
+	case "true":
+		l.AddToken(result, TRUE, word, start)
+	case "false":
+		l.AddToken(result, FALSE, word, start)
 	case "print":
 		l.AddToken(result, PRINT, word, start)
 	case "if":
@@ -137,6 +167,22 @@ func (l *Lexer) TokenizeOperator(result *[]Token) {
 			l.AddToken(result, NEQ, "!=", start)
 		} else {
 			l.AddToken(result, EXCL, "!", start)
+		}
+	case '&':
+		l.Next()
+		if l.Peek() == '&' {
+			l.Next()
+			l.AddToken(result, AND, "&&", start)
+		} else {
+			panic(fmt.Sprintf("Unexpected character '%c' at position %d", current, start))
+		}
+	case '|':
+		l.Next()
+		if l.Peek() == '|' {
+			l.Next()
+			l.AddToken(result, OR, "||", start)
+		} else {
+			panic(fmt.Sprintf("Unexpected character '%c' at position %d", current, start))
 		}
 	case ';':
 		l.Next()

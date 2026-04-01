@@ -134,13 +134,11 @@ func (p *Parser) parseBlock() []ast.Statement {
 	return statements
 }
 
-// --- Expressions ---
-
 func (p *Parser) parseExpression() ast.Expression {
 	return p.parseAssignment()
 }
 
-// 1. Присваивание
+// Assign
 func (p *Parser) parseAssignment() ast.Expression {
 	expr := p.parseLogicalOr()
 
@@ -158,7 +156,7 @@ func (p *Parser) parseAssignment() ast.Expression {
 	return expr
 }
 
-// 2. Логическое ИЛИ (||)
+// ||
 func (p *Parser) parseLogicalOr() ast.Expression {
 	expr := p.parseLogicalAnd()
 
@@ -171,7 +169,7 @@ func (p *Parser) parseLogicalOr() ast.Expression {
 	return expr
 }
 
-// 3. Логическое И (&&)
+// &&
 func (p *Parser) parseLogicalAnd() ast.Expression {
 	expr := p.parseEquality()
 
@@ -184,7 +182,7 @@ func (p *Parser) parseLogicalAnd() ast.Expression {
 	return expr
 }
 
-// 4. Равенство (==, !=)
+// ==, !=
 func (p *Parser) parseEquality() ast.Expression {
 	expr := p.parseComparison()
 
@@ -197,7 +195,7 @@ func (p *Parser) parseEquality() ast.Expression {
 	return expr
 }
 
-// 5. Сравнение (<, >, <=, >=)
+// <, >, <=, >=
 func (p *Parser) parseComparison() ast.Expression {
 	expr := p.parseTerm()
 
@@ -210,7 +208,7 @@ func (p *Parser) parseComparison() ast.Expression {
 	return expr
 }
 
-// 6. Сложение/Вычитание (+, -)
+// +, -
 func (p *Parser) parseTerm() ast.Expression {
 	expr := p.parseFactor()
 
@@ -223,7 +221,7 @@ func (p *Parser) parseTerm() ast.Expression {
 	return expr
 }
 
-// 7. Умножение/Деление (*, /)
+// *, /
 func (p *Parser) parseFactor() ast.Expression {
 	expr := p.parseUnary()
 
@@ -236,7 +234,7 @@ func (p *Parser) parseFactor() ast.Expression {
 	return expr
 }
 
-// 8. Унарные (!, -)
+// !, -
 func (p *Parser) parseUnary() ast.Expression {
 	if p.match(lexer.EXCL, lexer.MINUS) {
 		op := p.previous().Type
@@ -258,6 +256,18 @@ func (p *Parser) parsePrimary() ast.Expression {
 		return &ast.NumberExpression{Value: val}
 	}
 
+	if p.match(lexer.STRING) {
+		return &ast.StringExpression{Value: p.previous().Value}
+	}
+
+	if p.match(lexer.TRUE) {
+		return &ast.BoolExpression{Value: true}
+	}
+
+	if p.match(lexer.FALSE) {
+		return &ast.BoolExpression{Value: false}
+	}
+
 	if p.match(lexer.ID) {
 		return &ast.VariableExpression{Name: p.previous().Value}
 	}
@@ -272,8 +282,6 @@ func (p *Parser) parsePrimary() ast.Expression {
 	p.error(fmt.Sprintf("expected expression at position %d, found: %s", token.Position, token.Type))
 	return nil
 }
-
-// --- Helpers ---
 
 func (p *Parser) match(types ...lexer.TokenType) bool {
 	for _, t := range types {
@@ -305,7 +313,6 @@ func (p *Parser) isAtEnd() bool {
 
 func (p *Parser) peek() lexer.Token {
 	if p.position >= len(p.tokens) {
-		// Возвращаем фиктивный EOF токен, если вышли за границы
 		return lexer.NewToken(lexer.EOF, "", -1)
 	}
 	return p.tokens[p.position]
@@ -324,7 +331,6 @@ func (p *Parser) consume(t lexer.TokenType, message string) lexer.Token {
 	return token
 }
 
-// error records a parsing error.
 func (p *Parser) error(message string) {
 	p.errors = append(p.errors, errors.New(message))
 }

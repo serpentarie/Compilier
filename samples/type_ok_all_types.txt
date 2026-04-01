@@ -1,0 +1,14 @@
+var n = 10;
+var m = 2.5;
+var s = "go";
+var t = "lang";
+var b = true;
+
+print n + m;
+print s + t;
+print n > m;
+print s == t;
+
+if (b && (n > m)) {
+  print "ok";
+}

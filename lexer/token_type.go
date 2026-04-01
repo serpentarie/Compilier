@@ -8,6 +8,8 @@ const (
 	NUMBER TokenType = iota
 	ID
 	STRING
+	TRUE
+	FALSE
 	VAR
 
 	PRINT
@@ -42,7 +44,7 @@ const (
 // String returns the string representation of the token type.
 func (t TokenType) String() string {
 	return [...]string{
-		"NUMBER", "ID", "STRING", "VAR",
+		"NUMBER", "ID", "STRING", "TRUE", "FALSE", "VAR",
 		"PRINT", "IF", "ELSE", "WHILE",
 		"PLUS", "MINUS", "STAR", "SLASH",
 		"EQ", "EQEQ", "EXCL", "NEQ",

@@ -14,6 +14,12 @@ type StringExpression struct {
 
 func (s *StringExpression) expressionNode() {}
 
+type BoolExpression struct {
+	Value bool
+}
+
+func (b *BoolExpression) expressionNode() {}
+
 type VariableExpression struct {
 	Name string
 }
