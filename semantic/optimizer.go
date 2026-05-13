@@ -120,6 +120,9 @@ func optimizeExpr(expr ast.Expression) ast.Expression {
 	case *ast.BinaryExpression:
 		e.Left = optimizeExpr(e.Left)
 		e.Right = optimizeExpr(e.Right)
+		if simplified := simplifyBinaryWithConstBool(e); simplified != nil {
+			return simplified
+		}
 		if c := evalConst(e); c.ok {
 			return constToExpr(c)
 		}
@@ -138,6 +141,71 @@ func optimizeExpr(expr ast.Expression) ast.Expression {
 
 	default:
 		return expr
+	}
+}
+
+func simplifyBinaryWithConstBool(e *ast.BinaryExpression) ast.Expression {
+	if e == nil {
+		return nil
+	}
+
+	switch e.Operator {
+	case lexer.AND, lexer.OR:
+		left := evalConst(e.Left)
+		right := evalConst(e.Right)
+		if left.ok && left.typ == typeBool {
+			if e.Operator == lexer.AND {
+				if !left.b {
+					return &ast.BoolExpression{Value: false}
+				}
+				return e.Right
+			}
+			if left.b {
+				return &ast.BoolExpression{Value: true}
+			}
+			return e.Right
+		}
+		if right.ok && right.typ == typeBool {
+			if e.Operator == lexer.AND {
+				if !right.b {
+					return &ast.BoolExpression{Value: false}
+				}
+				return e.Left
+			}
+			if right.b {
+				return &ast.BoolExpression{Value: true}
+			}
+			return e.Left
+		}
+
+	case lexer.EQEQ, lexer.NEQ:
+		left := evalConst(e.Left)
+		right := evalConst(e.Right)
+		if left.ok && left.typ == typeBool && !(right.ok && right.typ == typeBool) {
+			return simplifyEqBoolConst(left.b, e.Operator, e.Right)
+		}
+		if right.ok && right.typ == typeBool && !(left.ok && left.typ == typeBool) {
+			return simplifyEqBoolConst(right.b, e.Operator, e.Left)
+		}
+	}
+
+	return nil
+}
+
+func simplifyEqBoolConst(value bool, op lexer.TokenType, other ast.Expression) ast.Expression {
+	switch op {
+	case lexer.EQEQ:
+		if value {
+			return other
+		}
+		return &ast.UnaryExpression{Operator: lexer.EXCL, Right: other}
+	case lexer.NEQ:
+		if value {
+			return &ast.UnaryExpression{Operator: lexer.EXCL, Right: other}
+		}
+		return other
+	default:
+		return nil
 	}
 }
 

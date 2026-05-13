@@ -7,6 +7,7 @@ import (
 	"mycompiler/interpreter"
 	"mycompiler/lexer"
 	"mycompiler/parser"
+	"mycompiler/semantic"
 )
 
 func main() {
@@ -34,6 +35,8 @@ func main() {
 		}
 		os.Exit(1)
 	}
+
+	statements = semantic.Optimize(statements)
 
 	i := interpreter.NewInterpreter()
 	if err := i.Interpret(statements); err != nil {
