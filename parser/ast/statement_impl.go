@@ -39,3 +39,17 @@ type WhileStatement struct {
 }
 
 func (w *WhileStatement) statementNode() {}
+
+type FunctionStatement struct {
+	Name   string
+	Params []string
+	Body   []Statement
+}
+
+func (f *FunctionStatement) statementNode() {}
+
+type ReturnStatement struct {
+	Value Expression
+}
+
+func (r *ReturnStatement) statementNode() {}

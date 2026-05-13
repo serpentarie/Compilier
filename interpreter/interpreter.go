@@ -13,6 +13,42 @@ type Interpreter struct {
 	warnings []error
 }
 
+type returnValue struct {
+	value Object
+}
+
+func (r returnValue) Error() string {
+	return "return"
+}
+
+type Function struct {
+	name    string
+	params  []string
+	body    []ast.Statement
+	closure *Environment
+}
+
+func (f *Function) call(i *Interpreter, args []Object) (Object, error) {
+	if len(args) != len(f.params) {
+		return Object{}, fmt.Errorf("runtime error: function '%s' expects %d arguments, got %d", f.name, len(f.params), len(args))
+	}
+
+	env := NewEnvironment(f.closure)
+	for idx, name := range f.params {
+		env.DefineInitialized(name, args[idx])
+	}
+
+	err := i.executeBlock(f.body, env)
+	if err != nil {
+		if ret, ok := err.(returnValue); ok {
+			return ret.value, nil
+		}
+		return Object{}, err
+	}
+
+	return NilObject(), nil
+}
+
 func NewInterpreter() *Interpreter {
 	globals := NewEnvironment(nil)
 	return &Interpreter{
@@ -29,6 +65,9 @@ func (i *Interpreter) Warnings() []error {
 func (i *Interpreter) Interpret(statements []ast.Statement) error {
 	for _, stmt := range statements {
 		if err := i.Execute(stmt); err != nil {
+			if _, ok := err.(returnValue); ok {
+				return fmt.Errorf("runtime error: 'return' outside function")
+			}
 			return err
 		}
 	}
@@ -106,6 +145,24 @@ func (i *Interpreter) Execute(stmt ast.Statement) error {
 		}
 		return nil
 
+	case *ast.FunctionStatement:
+		fn := &Function{name: s.Name, params: s.Params, body: s.Body, closure: i.env}
+		i.env.DefineInitialized(s.Name, FunctionObject(fn))
+		return nil
+
+	case *ast.ReturnStatement:
+		var value Object
+		if s.Value != nil {
+			v, err := i.evaluate(s.Value)
+			if err != nil {
+				return err
+			}
+			value = v
+		} else {
+			value = NilObject()
+		}
+		return returnValue{value: value}
+
 	default:
 		return fmt.Errorf("runtime error: unknown statement type %T", stmt)
 	}
@@ -153,6 +210,25 @@ func (i *Interpreter) evaluate(expr ast.Expression) (Object, error) {
 			return Object{}, err
 		}
 		return value, nil
+
+	case *ast.CallExpression:
+		callee, err := i.evaluate(e.Callee)
+		if err != nil {
+			return Object{}, err
+		}
+		fn, ok := asFunction(callee)
+		if !ok {
+			return Object{}, fmt.Errorf("runtime error: can only call functions")
+		}
+		args := make([]Object, 0, len(e.Arguments))
+		for _, argExpr := range e.Arguments {
+			arg, err := i.evaluate(argExpr)
+			if err != nil {
+				return Object{}, err
+			}
+			args = append(args, arg)
+		}
+		return fn.call(i, args)
 
 	case *ast.UnaryExpression:
 		right, err := i.evaluate(e.Right)
@@ -344,12 +420,22 @@ func asBool(o Object) (bool, bool) {
 	return v, ok
 }
 
+func asFunction(o Object) (*Function, bool) {
+	if o.Type != ObjectFunction {
+		return nil, false
+	}
+	fn, ok := o.Value.(*Function)
+	return fn, ok
+}
+
 func equals(left, right Object) bool {
 	if left.Type != right.Type {
 		return false
 	}
 
 	switch left.Type {
+	case ObjectNil:
+		return true
 	case ObjectNumber:
 		l, _ := asNumber(left)
 		r, _ := asNumber(right)
@@ -362,6 +448,8 @@ func equals(left, right Object) bool {
 		l, _ := asBool(left)
 		r, _ := asBool(right)
 		return l == r
+	case ObjectFunction:
+		return left.Value == right.Value
 	default:
 		return false
 	}

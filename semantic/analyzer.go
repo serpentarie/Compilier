@@ -14,6 +14,7 @@ const (
 	typeNumber
 	typeString
 	typeBool
+	typeFunction
 )
 
 func (t valueType) String() string {
@@ -24,6 +25,8 @@ func (t valueType) String() string {
 		return "string"
 	case typeBool:
 		return "bool"
+	case typeFunction:
+		return "function"
 	default:
 		return "unknown"
 	}
@@ -36,9 +39,10 @@ type varInfo struct {
 }
 
 type Analyzer struct {
-	scopes   []map[string]*varInfo
-	errors   []error
-	warnings []error
+	scopes        []map[string]*varInfo
+	errors        []error
+	warnings      []error
+	functionDepth int
 }
 
 func NewAnalyzer() *Analyzer {
@@ -200,6 +204,47 @@ func (a *Analyzer) analyzeStmt(stmt ast.Statement) {
 		}
 		a.analyzeStmt(s.Body)
 
+	case *ast.FunctionStatement:
+		if s.Name == "" {
+			a.errorf("function declaration with empty name")
+			return
+		}
+
+		a.declare(s.Name)
+		a.define(s.Name, typeFunction)
+
+		a.beginScope()
+		seenParams := map[string]struct{}{}
+		for _, p := range s.Params {
+			if p == "" {
+				a.errorf("function '%s' has empty parameter name", s.Name)
+				continue
+			}
+			if _, exists := seenParams[p]; exists {
+				a.errorf("function '%s' has duplicate parameter '%s'", s.Name, p)
+				continue
+			}
+			seenParams[p] = struct{}{}
+			a.declare(p)
+			a.define(p, typeUnknown)
+		}
+
+		a.functionDepth++
+		for _, bodyStmt := range s.Body {
+			a.analyzeStmt(bodyStmt)
+		}
+		a.functionDepth--
+		a.endScope()
+
+	case *ast.ReturnStatement:
+		if a.functionDepth == 0 {
+			a.errorf("'return' is only allowed inside function body")
+			return
+		}
+		if s.Value != nil {
+			a.analyzeExpr(s.Value)
+		}
+
 	default:
 		a.errorf("unknown statement node type: %T", stmt)
 	}
@@ -259,6 +304,20 @@ func (a *Analyzer) analyzeExpr(expr ast.Expression) valueType {
 			a.define(e.Name, info.typ)
 		}
 		return valueType
+
+	case *ast.CallExpression:
+		if e.Callee == nil {
+			a.errorf("call expression with nil callee")
+			return typeUnknown
+		}
+		calleeType := a.analyzeExpr(e.Callee)
+		for _, arg := range e.Arguments {
+			a.analyzeExpr(arg)
+		}
+		if calleeType != typeFunction && calleeType != typeUnknown {
+			a.errorf("attempt to call non-function value of type %s", calleeType)
+		}
+		return typeUnknown
 
 	case *ast.UnaryExpression:
 		if e.Right == nil {

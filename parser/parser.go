@@ -49,6 +49,9 @@ func (p *Parser) HasErrors() bool {
 // --- Statements ---
 
 func (p *Parser) parseDeclaration() ast.Statement {
+	if p.match(lexer.FUN) {
+		return p.parseFunctionDeclaration()
+	}
 	if p.match(lexer.VAR) {
 		return p.parseVarDeclaration()
 	}
@@ -56,6 +59,9 @@ func (p *Parser) parseDeclaration() ast.Statement {
 }
 
 func (p *Parser) parseStatement() ast.Statement {
+	if p.match(lexer.RETURN) {
+		return p.parseReturnStatement()
+	}
 	if p.match(lexer.IF) {
 		return p.parseIfStatement()
 	}
@@ -70,6 +76,38 @@ func (p *Parser) parseStatement() ast.Statement {
 	}
 
 	return p.parseExpressionStatement()
+}
+
+func (p *Parser) parseFunctionDeclaration() ast.Statement {
+	name := p.consume(lexer.ID, "expected function name")
+	p.consume(lexer.LPAREN, "expected '(' after function name")
+
+	params := make([]string, 0)
+	if !p.check(lexer.RPAREN) {
+		for {
+			param := p.consume(lexer.ID, "expected parameter name")
+			params = append(params, param.Value)
+
+			if !p.match(lexer.COMMA) {
+				break
+			}
+		}
+	}
+
+	p.consume(lexer.RPAREN, "expected ')' after function parameters")
+	p.consume(lexer.LBRACE, "expected '{' before function body")
+	body := p.parseBlock()
+
+	return &ast.FunctionStatement{Name: name.Value, Params: params, Body: body}
+}
+
+func (p *Parser) parseReturnStatement() ast.Statement {
+	var value ast.Expression
+	if !p.check(lexer.SEMICOLON) {
+		value = p.parseExpression()
+	}
+	p.consume(lexer.SEMICOLON, "expected ';' after return value")
+	return &ast.ReturnStatement{Value: value}
 }
 
 func (p *Parser) parseVarDeclaration() ast.Statement {
@@ -241,7 +279,36 @@ func (p *Parser) parseUnary() ast.Expression {
 		right := p.parseUnary()
 		return &ast.UnaryExpression{Operator: op, Right: right}
 	}
-	return p.parsePrimary()
+	return p.parseCall()
+}
+
+func (p *Parser) parseCall() ast.Expression {
+	expr := p.parsePrimary()
+
+	for {
+		if p.match(lexer.LPAREN) {
+			expr = p.finishCall(expr)
+		} else {
+			break
+		}
+	}
+
+	return expr
+}
+
+func (p *Parser) finishCall(callee ast.Expression) ast.Expression {
+	arguments := make([]ast.Expression, 0)
+	if !p.check(lexer.RPAREN) {
+		for {
+			arguments = append(arguments, p.parseExpression())
+			if !p.match(lexer.COMMA) {
+				break
+			}
+		}
+	}
+
+	p.consume(lexer.RPAREN, "expected ')' after arguments")
+	return &ast.CallExpression{Callee: callee, Arguments: arguments}
 }
 
 // 9. Primary

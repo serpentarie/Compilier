@@ -48,6 +48,7 @@ func (l *Lexer) Tokenize() []Token {
 		l.TokenizeOperator(&result)
 	}
 
+	result = append(result, NewToken(EOF, "", l.position))
 	return result
 }
 
@@ -102,6 +103,10 @@ func (l *Lexer) TokenizeWord(result *[]Token) {
 	switch word {
 	case "var":
 		l.AddToken(result, VAR, word, start)
+	case "fun", "func":
+		l.AddToken(result, FUN, word, start)
+	case "return":
+		l.AddToken(result, RETURN, word, start)
 	case "true":
 		l.AddToken(result, TRUE, word, start)
 	case "false":
@@ -199,6 +204,9 @@ func (l *Lexer) TokenizeOperator(result *[]Token) {
 	case '}':
 		l.Next()
 		l.AddToken(result, RBRACE, "}", start)
+	case ',':
+		l.Next()
+		l.AddToken(result, COMMA, ",", start)
 	default:
 		panic(fmt.Sprintf("Unexpected character '%c' at position %d", current, l.position))
 	}

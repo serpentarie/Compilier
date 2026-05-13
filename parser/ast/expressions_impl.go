@@ -47,3 +47,10 @@ type AssignExpression struct {
 }
 
 func (a *AssignExpression) expressionNode() {}
+
+type CallExpression struct {
+	Callee    Expression
+	Arguments []Expression
+}
+
+func (c *CallExpression) expressionNode() {}

@@ -11,6 +11,8 @@ const (
 	TRUE
 	FALSE
 	VAR
+	FUN
+	RETURN
 
 	PRINT
 	IF
@@ -36,6 +38,7 @@ const (
 	RPAREN
 	LBRACE
 	RBRACE
+	COMMA
 	SEMICOLON
 
 	EOF
@@ -44,13 +47,13 @@ const (
 // String returns the string representation of the token type.
 func (t TokenType) String() string {
 	return [...]string{
-		"NUMBER", "ID", "STRING", "TRUE", "FALSE", "VAR",
+		"NUMBER", "ID", "STRING", "TRUE", "FALSE", "VAR", "FUN", "RETURN",
 		"PRINT", "IF", "ELSE", "WHILE",
 		"PLUS", "MINUS", "STAR", "SLASH",
 		"EQ", "EQEQ", "EXCL", "NEQ",
 		"LT", "GT", "LTEQ", "GTEQ",
 		"AND", "OR",
-		"LPAREN", "RPAREN", "LBRACE", "RBRACE", "SEMICOLON",
+		"LPAREN", "RPAREN", "LBRACE", "RBRACE", "COMMA", "SEMICOLON",
 		"EOF",
 	}[t]
 }

@@ -37,6 +37,7 @@ func main() {
 
 	p := parser.NewParser(tokens)
 	statements := p.Parse()
+	statements = semantic.Optimize(statements)
 
 	if p.HasErrors() {
 		fmt.Println("[Parser errors]")
