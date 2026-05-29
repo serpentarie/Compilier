@@ -186,6 +186,9 @@ func (p *Parser) parseAssignment() ast.Expression {
 		if variable, ok := expr.(*ast.VariableExpression); ok {
 			return &ast.AssignExpression{Name: variable.Name, Value: value}
 		}
+		if indexExpr, ok := expr.(*ast.IndexExpression); ok {
+			return &ast.IndexAssignExpression{Target: indexExpr.Target, Index: indexExpr.Index, Value: value}
+		}
 
 		p.error(fmt.Sprintf("invalid assignment target at position %d", p.previous().Position))
 		return nil
@@ -288,6 +291,10 @@ func (p *Parser) parseCall() ast.Expression {
 	for {
 		if p.match(lexer.LPAREN) {
 			expr = p.finishCall(expr)
+		} else if p.match(lexer.LBRACKET) {
+			index := p.parseExpression()
+			p.consume(lexer.RBRACKET, "expected ']' after index expression")
+			expr = &ast.IndexExpression{Target: expr, Index: index}
 		} else {
 			break
 		}
@@ -337,6 +344,20 @@ func (p *Parser) parsePrimary() ast.Expression {
 
 	if p.match(lexer.ID) {
 		return &ast.VariableExpression{Name: p.previous().Value}
+	}
+
+	if p.match(lexer.LBRACKET) {
+		elements := make([]ast.Expression, 0)
+		if !p.check(lexer.RBRACKET) {
+			for {
+				elements = append(elements, p.parseExpression())
+				if !p.match(lexer.COMMA) {
+					break
+				}
+			}
+		}
+		p.consume(lexer.RBRACKET, "expected ']' after array literal")
+		return &ast.ArrayExpression{Elements: elements}
 	}
 
 	if p.match(lexer.LPAREN) {

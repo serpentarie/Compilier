@@ -15,6 +15,7 @@ const (
 	typeString
 	typeBool
 	typeFunction
+	typeArray
 )
 
 func (t valueType) String() string {
@@ -27,15 +28,40 @@ func (t valueType) String() string {
 		return "bool"
 	case typeFunction:
 		return "function"
+	case typeArray:
+		return "array"
 	default:
 		return "unknown"
 	}
 }
 
+type typeInfo struct {
+	kind valueType
+	elem valueType
+}
+
+func simpleType(kind valueType) typeInfo {
+	return typeInfo{kind: kind, elem: typeUnknown}
+}
+
+func arrayType(elem valueType) typeInfo {
+	return typeInfo{kind: typeArray, elem: elem}
+}
+
+func (t typeInfo) String() string {
+	if t.kind == typeArray {
+		if t.elem == typeUnknown {
+			return "array<unknown>"
+		}
+		return fmt.Sprintf("array<%s>", t.elem)
+	}
+	return t.kind.String()
+}
+
 type varInfo struct {
 	defined bool
 	used    bool
-	typ     valueType
+	typ     typeInfo
 }
 
 type Analyzer struct {
@@ -110,15 +136,20 @@ func (a *Analyzer) declare(name string) {
 		a.errorf("redeclared variable '%s' in the same scope", name)
 		return
 	}
-	scope[name] = &varInfo{defined: false, used: false, typ: typeUnknown}
+	scope[name] = &varInfo{defined: false, used: false, typ: simpleType(typeUnknown)}
 }
 
-func (a *Analyzer) define(name string, typ valueType) {
+func (a *Analyzer) define(name string, typ typeInfo) {
 	info, ok := a.resolve(name)
 	if !ok {
 		return
 	}
-	if info.typ == typeUnknown {
+	if info.typ.kind == typeUnknown {
+		info.typ = typ
+		info.defined = true
+		return
+	}
+	if info.typ.kind == typeArray && info.typ.elem == typeUnknown && typ.kind == typeArray && typ.elem != typeUnknown {
 		info.typ = typ
 	}
 	info.defined = true
@@ -176,7 +207,7 @@ func (a *Analyzer) analyzeStmt(stmt ast.Statement) {
 			a.errorf("if statement with nil condition")
 		} else {
 			conditionType := a.analyzeExpr(s.Condition)
-			if conditionType != typeBool && conditionType != typeUnknown {
+			if conditionType.kind != typeBool && conditionType.kind != typeUnknown {
 				a.errorf("if condition must be bool, got %s", conditionType)
 			}
 		}
@@ -194,7 +225,7 @@ func (a *Analyzer) analyzeStmt(stmt ast.Statement) {
 			a.errorf("while statement with nil condition")
 		} else {
 			conditionType := a.analyzeExpr(s.Condition)
-			if conditionType != typeBool && conditionType != typeUnknown {
+			if conditionType.kind != typeBool && conditionType.kind != typeUnknown {
 				a.errorf("while condition must be bool, got %s", conditionType)
 			}
 		}
@@ -211,7 +242,7 @@ func (a *Analyzer) analyzeStmt(stmt ast.Statement) {
 		}
 
 		a.declare(s.Name)
-		a.define(s.Name, typeFunction)
+		a.define(s.Name, simpleType(typeFunction))
 
 		a.beginScope()
 		seenParams := map[string]struct{}{}
@@ -226,7 +257,7 @@ func (a *Analyzer) analyzeStmt(stmt ast.Statement) {
 			}
 			seenParams[p] = struct{}{}
 			a.declare(p)
-			a.define(p, typeUnknown)
+			a.define(p, simpleType(typeUnknown))
 		}
 
 		a.functionDepth++
@@ -250,44 +281,44 @@ func (a *Analyzer) analyzeStmt(stmt ast.Statement) {
 	}
 }
 
-func (a *Analyzer) analyzeExpr(expr ast.Expression) valueType {
+func (a *Analyzer) analyzeExpr(expr ast.Expression) typeInfo {
 	if expr == nil {
 		a.errorf("nil expression")
-		return typeUnknown
+		return simpleType(typeUnknown)
 	}
 
 	switch e := expr.(type) {
 	case *ast.NumberExpression:
-		return typeNumber
+		return simpleType(typeNumber)
 	case *ast.StringExpression:
-		return typeString
+		return simpleType(typeString)
 	case *ast.BoolExpression:
-		return typeBool
+		return simpleType(typeBool)
 	case *ast.VariableExpression:
 		if e.Name == "" {
 			a.errorf("variable expression with empty name")
-			return typeUnknown
+			return simpleType(typeUnknown)
 		}
 		info, ok := a.resolve(e.Name)
 		if !ok {
 			a.errorf("variable '%s' is not declared", e.Name)
-			return typeUnknown
+			return simpleType(typeUnknown)
 		}
 		a.markUsed(e.Name)
 		if !info.defined {
 			a.errorf("variable '%s' is used before it is initialized", e.Name)
-			return typeUnknown
+			return simpleType(typeUnknown)
 		}
 		return info.typ
 
 	case *ast.AssignExpression:
 		if e.Name == "" {
 			a.errorf("assignment with empty target name")
-			return typeUnknown
+			return simpleType(typeUnknown)
 		}
 		if e.Value == nil {
 			a.errorf("assignment to '%s' with nil value", e.Name)
-			return typeUnknown
+			return simpleType(typeUnknown)
 		}
 
 		valueType := a.analyzeExpr(e.Value)
@@ -296,9 +327,9 @@ func (a *Analyzer) analyzeExpr(expr ast.Expression) valueType {
 		if !ok {
 			a.errorf("cannot assign to undeclared variable '%s'", e.Name)
 		} else {
-			if info.typ == typeUnknown {
+			if info.typ.kind == typeUnknown {
 				info.typ = valueType
-			} else if valueType != typeUnknown && info.typ != valueType {
+			} else if valueType.kind != typeUnknown && !sameType(info.typ, valueType) {
 				a.errorf("type mismatch in assignment to '%s': expected %s, got %s", e.Name, info.typ, valueType)
 			}
 			a.define(e.Name, info.typ)
@@ -308,98 +339,169 @@ func (a *Analyzer) analyzeExpr(expr ast.Expression) valueType {
 	case *ast.CallExpression:
 		if e.Callee == nil {
 			a.errorf("call expression with nil callee")
-			return typeUnknown
+			return simpleType(typeUnknown)
 		}
 		calleeType := a.analyzeExpr(e.Callee)
 		for _, arg := range e.Arguments {
 			a.analyzeExpr(arg)
 		}
-		if calleeType != typeFunction && calleeType != typeUnknown {
+		if calleeType.kind != typeFunction && calleeType.kind != typeUnknown {
 			a.errorf("attempt to call non-function value of type %s", calleeType)
 		}
-		return typeUnknown
+		return simpleType(typeUnknown)
 
 	case *ast.UnaryExpression:
 		if e.Right == nil {
 			a.errorf("unary expression with nil operand")
-			return typeUnknown
+			return simpleType(typeUnknown)
 		}
 		rightType := a.analyzeExpr(e.Right)
 		switch e.Operator {
 		case lexer.MINUS:
-			if rightType != typeNumber && rightType != typeUnknown {
+			if rightType.kind != typeNumber && rightType.kind != typeUnknown {
 				a.errorf("operator '-' requires number operand, got %s", rightType)
-				return typeUnknown
+				return simpleType(typeUnknown)
 			}
-			return typeNumber
+			return simpleType(typeNumber)
 		case lexer.EXCL:
-			if rightType != typeBool && rightType != typeUnknown {
+			if rightType.kind != typeBool && rightType.kind != typeUnknown {
 				a.errorf("operator '!' requires bool operand, got %s", rightType)
-				return typeUnknown
+				return simpleType(typeUnknown)
 			}
-			return typeBool
+			return simpleType(typeBool)
 		default:
 			a.errorf("unknown unary operator: %s", e.Operator)
-			return typeUnknown
+			return simpleType(typeUnknown)
 		}
 
 	case *ast.BinaryExpression:
 		if e.Left == nil || e.Right == nil {
 			a.errorf("binary expression with nil operand")
-			return typeUnknown
+			return simpleType(typeUnknown)
 		}
 		leftType := a.analyzeExpr(e.Left)
 		rightType := a.analyzeExpr(e.Right)
 
 		switch e.Operator {
 		case lexer.PLUS:
-			if leftType == typeNumber && rightType == typeNumber {
-				return typeNumber
+			if leftType.kind == typeNumber && rightType.kind == typeNumber {
+				return simpleType(typeNumber)
 			}
-			if leftType == typeString && rightType == typeString {
-				return typeString
+			if leftType.kind == typeString && rightType.kind == typeString {
+				return simpleType(typeString)
 			}
 			a.errorf("operator '+' supports only number+number or string+string, got %s+%s", leftType, rightType)
-			return typeUnknown
+			return simpleType(typeUnknown)
 
 		case lexer.MINUS, lexer.STAR, lexer.SLASH:
-			if leftType == typeNumber && rightType == typeNumber {
-				return typeNumber
+			if leftType.kind == typeNumber && rightType.kind == typeNumber {
+				return simpleType(typeNumber)
 			}
 			a.errorf("operator '%s' supports only number operands, got %s and %s", e.Operator, leftType, rightType)
-			return typeUnknown
+			return simpleType(typeUnknown)
 
 		case lexer.LT, lexer.LTEQ, lexer.GT, lexer.GTEQ:
-			if leftType == typeNumber && rightType == typeNumber {
-				return typeBool
+			if leftType.kind == typeNumber && rightType.kind == typeNumber {
+				return simpleType(typeBool)
 			}
 			a.errorf("comparison operator '%s' supports only numbers, got %s and %s", e.Operator, leftType, rightType)
-			return typeUnknown
+			return simpleType(typeUnknown)
 
 		case lexer.EQEQ, lexer.NEQ:
-			if leftType == typeUnknown || rightType == typeUnknown {
-				return typeBool
+			if leftType.kind == typeUnknown || rightType.kind == typeUnknown {
+				return simpleType(typeBool)
 			}
-			if leftType == rightType {
-				return typeBool
+			if sameType(leftType, rightType) {
+				return simpleType(typeBool)
 			}
 			a.errorf("equality operator '%s' requires same operand types, got %s and %s", e.Operator, leftType, rightType)
-			return typeUnknown
+			return simpleType(typeUnknown)
 
 		case lexer.AND, lexer.OR:
-			if leftType == typeBool && rightType == typeBool {
-				return typeBool
+			if leftType.kind == typeBool && rightType.kind == typeBool {
+				return simpleType(typeBool)
 			}
 			a.errorf("logical operator '%s' supports only bool operands, got %s and %s", e.Operator, leftType, rightType)
-			return typeUnknown
+			return simpleType(typeUnknown)
 
 		default:
 			a.errorf("unknown binary operator: %s", e.Operator)
-			return typeUnknown
+			return simpleType(typeUnknown)
 		}
+
+	case *ast.ArrayExpression:
+		elemType := simpleType(typeUnknown)
+		for _, el := range e.Elements {
+			if el == nil {
+				a.errorf("array literal contains nil element")
+				continue
+			}
+			curr := a.analyzeExpr(el)
+			if elemType.kind == typeUnknown && curr.kind != typeUnknown {
+				elemType = curr
+				continue
+			}
+			if curr.kind != typeUnknown && !sameType(elemType, curr) {
+				a.errorf("array literal elements must be of same type, got %s and %s", elemType, curr)
+			}
+		}
+		return arrayType(elemType.kind)
+
+	case *ast.IndexExpression:
+		if e.Target == nil || e.Index == nil {
+			a.errorf("index expression with nil target or index")
+			return simpleType(typeUnknown)
+		}
+		arrType := a.analyzeExpr(e.Target)
+		idxType := a.analyzeExpr(e.Index)
+		if idxType.kind != typeNumber && idxType.kind != typeUnknown {
+			a.errorf("array index must be number, got %s", idxType)
+		}
+		if arrType.kind == typeArray {
+			return simpleType(arrType.elem)
+		}
+		if arrType.kind != typeUnknown {
+			a.errorf("indexing requires array, got %s", arrType)
+		}
+		return simpleType(typeUnknown)
+
+	case *ast.IndexAssignExpression:
+		if e.Target == nil || e.Index == nil || e.Value == nil {
+			a.errorf("index assignment with nil target, index, or value")
+			return simpleType(typeUnknown)
+		}
+		arrType := a.analyzeExpr(e.Target)
+		idxType := a.analyzeExpr(e.Index)
+		valueType := a.analyzeExpr(e.Value)
+		if idxType.kind != typeNumber && idxType.kind != typeUnknown {
+			a.errorf("array index must be number, got %s", idxType)
+		}
+		if arrType.kind == typeArray {
+			if arrType.elem != typeUnknown && valueType.kind != typeUnknown && arrType.elem != valueType.kind {
+				a.errorf("type mismatch in index assignment: expected %s, got %s", simpleType(arrType.elem), valueType)
+			}
+			return simpleType(arrType.elem)
+		}
+		if arrType.kind != typeUnknown {
+			a.errorf("index assignment requires array, got %s", arrType)
+		}
+		return simpleType(typeUnknown)
 
 	default:
 		a.errorf("unknown expression node type: %T", expr)
-		return typeUnknown
+		return simpleType(typeUnknown)
 	}
+}
+
+func sameType(a, b typeInfo) bool {
+	if a.kind != b.kind {
+		return false
+	}
+	if a.kind == typeArray {
+		if a.elem == typeUnknown || b.elem == typeUnknown {
+			return true
+		}
+		return a.elem == b.elem
+	}
+	return true
 }

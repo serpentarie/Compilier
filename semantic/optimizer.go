@@ -139,6 +139,23 @@ func optimizeExpr(expr ast.Expression) ast.Expression {
 		}
 		return e
 
+	case *ast.ArrayExpression:
+		for i, el := range e.Elements {
+			e.Elements[i] = optimizeExpr(el)
+		}
+		return e
+
+	case *ast.IndexExpression:
+		e.Target = optimizeExpr(e.Target)
+		e.Index = optimizeExpr(e.Index)
+		return e
+
+	case *ast.IndexAssignExpression:
+		e.Target = optimizeExpr(e.Target)
+		e.Index = optimizeExpr(e.Index)
+		e.Value = optimizeExpr(e.Value)
+		return e
+
 	default:
 		return expr
 	}

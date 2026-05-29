@@ -13,6 +13,7 @@ const (
 	ObjectString
 	ObjectBool
 	ObjectFunction
+	ObjectArray
 )
 
 type Object struct {
@@ -40,6 +41,10 @@ func FunctionObject(v any) Object {
 	return Object{Type: ObjectFunction, Value: v}
 }
 
+func ArrayObject(v []Object) Object {
+	return Object{Type: ObjectArray, Value: v}
+}
+
 func (o Object) String() string {
 	switch o.Type {
 	case ObjectNil:
@@ -58,6 +63,17 @@ func (o Object) String() string {
 		return "false"
 	case ObjectFunction:
 		return "<function>"
+	case ObjectArray:
+		v, _ := o.Value.([]Object)
+		out := "["
+		for i, el := range v {
+			if i > 0 {
+				out += ", "
+			}
+			out += el.String()
+		}
+		out += "]"
+		return out
 	default:
 		return fmt.Sprintf("<unknown:%v>", o.Value)
 	}

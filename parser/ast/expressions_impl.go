@@ -54,3 +54,24 @@ type CallExpression struct {
 }
 
 func (c *CallExpression) expressionNode() {}
+
+type ArrayExpression struct {
+	Elements []Expression
+}
+
+func (a *ArrayExpression) expressionNode() {}
+
+type IndexExpression struct {
+	Target Expression
+	Index  Expression
+}
+
+func (i *IndexExpression) expressionNode() {}
+
+type IndexAssignExpression struct {
+	Target Expression
+	Index  Expression
+	Value  Expression
+}
+
+func (i *IndexAssignExpression) expressionNode() {}

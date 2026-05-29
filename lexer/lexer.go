@@ -198,6 +198,12 @@ func (l *Lexer) TokenizeOperator(result *[]Token) {
 	case ')':
 		l.Next()
 		l.AddToken(result, RPAREN, ")", start)
+	case '[':
+		l.Next()
+		l.AddToken(result, LBRACKET, "[", start)
+	case ']':
+		l.Next()
+		l.AddToken(result, RBRACKET, "]", start)
 	case '{':
 		l.Next()
 		l.AddToken(result, LBRACE, "{", start)

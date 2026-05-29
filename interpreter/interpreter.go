@@ -2,6 +2,7 @@ package interpreter
 
 import (
 	"fmt"
+	"math"
 
 	"mycompiler/lexer"
 	"mycompiler/parser/ast"
@@ -230,6 +231,74 @@ func (i *Interpreter) evaluate(expr ast.Expression) (Object, error) {
 		}
 		return fn.call(i, args)
 
+	case *ast.ArrayExpression:
+		elements := make([]Object, 0, len(e.Elements))
+		for _, el := range e.Elements {
+			val, err := i.evaluate(el)
+			if err != nil {
+				return Object{}, err
+			}
+			elements = append(elements, val)
+		}
+		return ArrayObject(elements), nil
+
+	case *ast.IndexExpression:
+		target, err := i.evaluate(e.Target)
+		if err != nil {
+			return Object{}, err
+		}
+		arr, ok := asArray(target)
+		if !ok {
+			return Object{}, fmt.Errorf("runtime error: indexing requires array")
+		}
+		idxObj, err := i.evaluate(e.Index)
+		if err != nil {
+			return Object{}, err
+		}
+		idxNum, ok := asNumber(idxObj)
+		if !ok {
+			return Object{}, fmt.Errorf("runtime error: array index must be number")
+		}
+		idx, ok := indexFromNumber(idxNum)
+		if !ok {
+			return Object{}, fmt.Errorf("runtime error: array index must be non-negative integer")
+		}
+		if idx < 0 || idx >= len(arr) {
+			return Object{}, fmt.Errorf("runtime error: array index out of bounds")
+		}
+		return arr[idx], nil
+
+	case *ast.IndexAssignExpression:
+		target, err := i.evaluate(e.Target)
+		if err != nil {
+			return Object{}, err
+		}
+		arr, ok := asArray(target)
+		if !ok {
+			return Object{}, fmt.Errorf("runtime error: index assignment requires array")
+		}
+		idxObj, err := i.evaluate(e.Index)
+		if err != nil {
+			return Object{}, err
+		}
+		idxNum, ok := asNumber(idxObj)
+		if !ok {
+			return Object{}, fmt.Errorf("runtime error: array index must be number")
+		}
+		idx, ok := indexFromNumber(idxNum)
+		if !ok {
+			return Object{}, fmt.Errorf("runtime error: array index must be non-negative integer")
+		}
+		if idx < 0 || idx >= len(arr) {
+			return Object{}, fmt.Errorf("runtime error: array index out of bounds")
+		}
+		value, err := i.evaluate(e.Value)
+		if err != nil {
+			return Object{}, err
+		}
+		arr[idx] = value
+		return value, nil
+
 	case *ast.UnaryExpression:
 		right, err := i.evaluate(e.Right)
 		if err != nil {
@@ -428,6 +497,24 @@ func asFunction(o Object) (*Function, bool) {
 	return fn, ok
 }
 
+func asArray(o Object) ([]Object, bool) {
+	if o.Type != ObjectArray {
+		return nil, false
+	}
+	v, ok := o.Value.([]Object)
+	return v, ok
+}
+
+func indexFromNumber(n float64) (int, bool) {
+	if math.IsNaN(n) || math.IsInf(n, 0) {
+		return 0, false
+	}
+	if n < 0 || math.Trunc(n) != n {
+		return 0, false
+	}
+	return int(n), true
+}
+
 func equals(left, right Object) bool {
 	if left.Type != right.Type {
 		return false
@@ -450,6 +537,21 @@ func equals(left, right Object) bool {
 		return l == r
 	case ObjectFunction:
 		return left.Value == right.Value
+	case ObjectArray:
+		l, lok := asArray(left)
+		r, rok := asArray(right)
+		if !lok || !rok {
+			return false
+		}
+		if len(l) != len(r) {
+			return false
+		}
+		for i := range l {
+			if !equals(l[i], r[i]) {
+				return false
+			}
+		}
+		return true
 	default:
 		return false
 	}

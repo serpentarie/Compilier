@@ -36,6 +36,8 @@ const (
 
 	LPAREN
 	RPAREN
+	LBRACKET
+	RBRACKET
 	LBRACE
 	RBRACE
 	COMMA
@@ -53,7 +55,7 @@ func (t TokenType) String() string {
 		"EQ", "EQEQ", "EXCL", "NEQ",
 		"LT", "GT", "LTEQ", "GTEQ",
 		"AND", "OR",
-		"LPAREN", "RPAREN", "LBRACE", "RBRACE", "COMMA", "SEMICOLON",
+		"LPAREN", "RPAREN", "LBRACKET", "RBRACKET", "LBRACE", "RBRACE", "COMMA", "SEMICOLON",
 		"EOF",
 	}[t]
 }

@@ -111,6 +111,23 @@ func (ap *AstPrinter) printNode(node interface{}, indent string, isLast bool) {
 			ap.printNode(arg, childIndent, i == len(n.Arguments)-1)
 		}
 
+	case *ast.ArrayExpression:
+		fmt.Println("ArrayExpression")
+		for i, el := range n.Elements {
+			ap.printNode(el, childIndent, i == len(n.Elements)-1)
+		}
+
+	case *ast.IndexExpression:
+		fmt.Println("IndexExpression")
+		ap.printNode(n.Target, childIndent, false)
+		ap.printNode(n.Index, childIndent, true)
+
+	case *ast.IndexAssignExpression:
+		fmt.Println("IndexAssignExpression")
+		ap.printNode(n.Target, childIndent, false)
+		ap.printNode(n.Index, childIndent, false)
+		ap.printNode(n.Value, childIndent, true)
+
 	case *ast.NumberExpression:
 		fmt.Printf("Number: %v\n", n.Value)
 
